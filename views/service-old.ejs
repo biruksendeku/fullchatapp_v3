@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title> Chat App </title>
+  <link rel="stylesheet" href="/css/service.css" />
+</head>
+<body>
+  <main class="main">
+    <!-- PART 2 -->
+    <div id="msgs">
+
+<!-- QUESTION STUFF -->
+
+     <% if(questions.length !== 0) { %>
+     	<% questions.forEach(quest => { %>
+     		<div class="div-quest-ans div-quest"> <p class="quest-para"> <%= quest %> </p> </div>
+     	<% }) %>
+     <% } else{ %>
+     	<div class="div-quest-ans div-quest"> <p class="quest-para"> Hey, your question will be here! </p> </div>
+     <% } %>
+
+<!-- ANSWER STUFF -->
+
+     <% if(answers.length !== 0) { %>
+     	<% answers.forEach(ans => { %>
+     		<div class="div-quest-ans div-ans"> <p class="ans-para"> <%= ans %> </p> </div>
+     	<% }) %>
+     <% } else{ %>
+     	<div class="div-quest-ans div-ans"> <p class="ans-para"> AI response will be here! </p> </div>
+     <% } %>
+     
+    </div>
+    
+    <!-- PART 1 -->
+    <div class="inputDiv">
+      <!-- form handler 1 -->
+      <div id="div1" class="divs">
+        <form class="forms" id="form1">
+          <label id="label1" for="message"> Message: </label>
+          <input type="text" id="message" name="message" />
+          <input type="submit" id="btn1" class="btns" value="Message" />
+        </form>
+      </div>
+      <!-- form handler 2 -->
+      <div id="div2" class="divs">
+        <!--<form class="forms" id="form2">
+          <label id="label2" for="room"> Room: </label>
+          <input type="text" id="room" name="room" />
+          <input type="submit" id="btn2" class="btns" value="Join" />
+        </form>-->
+        <button id="btn2" class="btns" type="button"> Disconnect </button>
+      </div>
+    </div>
+  </main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/service.js"></script>
+
+</body>
+</html>
