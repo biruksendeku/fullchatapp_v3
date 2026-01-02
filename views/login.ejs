@@ -4,26 +4,89 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title> Login </title>
-  <link rel="stylesheet" href="/css/login.css" />
+  <title>Login</title>
+  <!-- Font Awesome CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/css/login.css">
 </head>
 <body>
   <section class="form__section">
-    <form action="/login" class="form" method="post">
-      
-      <div class="divs">
-        <label class="labels" for="email"> Email: </label>
-        <input type="email" id="email" name="email" required autocomplete />
+    <form action="/login" class="form" method="post" id="loginForm">
+      <div class="logo">
+        <i class="fas fa-user-circle"></i>
       </div>
-      
+      <h1 class="form-title">Welcome Back</h1>
+
+      <% if(error && error.length > 0) { %>
+        <div class="alert-error"> 
+          <i class="fas fa-exclamation-circle"></i> <%= error %>
+        </div>
+      <% } else if(success && success.length > 0) { %>
+        <div class="alert-success"> 
+          <i class="fas fa-check-circle"></i> <%= success %>
+        </div>
+      <% } else { %>
+        <div class="alert-error" style="display: none;"></div>
+        <div class="alert-success" style="display: none;"></div>
+      <% } %>
+
       <div class="divs">
-        <label class="labels" for="password"> Password: </label>
-        <input type="password" id="password" name="password" required />
+        <label class="labels" for="email">
+          <i class="fas fa-envelope"></i> Email Address
+        </label>
+        <div class="input-wrapper">
+          <div class="input-icon">
+            <i class="fas fa-envelope"></i>
+          </div>
+          <input type="email" id="email" class="inputs-class" name="email" required autocomplete="email" placeholder="Enter your email" />
+        </div>
       </div>
+
+      <div class="divs">
+        <label class="labels" for="password">
+          <i class="fas fa-lock"></i> Password
+        </label>
+        <div class="input-wrapper">
+          <div class="input-icon">
+            <i class="fas fa-lock"></i>
+          </div>
+          <input type="password" id="password" class="inputs-class" name="password" required placeholder="Enter your password" />
+          <button id="show-btn" type="button" class="password-toggle" aria-label="Show password">
+            <i class="fas fa-eye"></i>
+          </button>
+        </div>
+      </div>
+
+      <button id="btn" class="btn" type="submit">
+        <i class="fas fa-sign-in-alt"></i> Login
+      </button>
       
-      <button id="btn" class="btn" type="submit"> Login </button>
-      <div class="div__msg"> OR create new account <a href="/signup">Signup</a></div>
+      <div class="div__msg">
+        Don't have an account? 
+        <a href="/signup"><i class="fas fa-user-plus"></i> Sign up now</a>
+      </div>
+
+      <div class="forgot-pass-div">
+        <a href="/api/reset/password">
+          <i class="fas fa-key"></i> Forgot Password?
+        </a>
+      </div>
+
+      <!-- Optional Social Login Section -->
+      <div class="social-login">
+        <a href="#" class="social-btn social-google" title="Login with Google">
+          <i class="fab fa-google"></i>
+        </a>
+        <a href="#" class="social-btn social-facebook" title="Login with Facebook">
+          <i class="fab fa-facebook-f"></i>
+        </a>
+        <a href="#" class="social-btn social-twitter" title="Login with Twitter">
+          <i class="fab fa-twitter"></i>
+        </a>
+      </div>
     </form>
   </section>
+
+  <script src="/js/login.js"></script>
 </body>
 </html>

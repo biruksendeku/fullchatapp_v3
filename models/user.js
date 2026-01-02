@@ -29,6 +29,11 @@ const userSchema = new mongoose.Schema({
 		required: [ true, 'Password field is required' ],
 		minlength: [ 6, 'Password length should be at least 6 characters long' ]
 	},
+	newPassword: {
+		type: String,
+		default: null,
+		minlength: [ 6, 'Password length should be at least 6 characters long' ]
+	},
 	conversations: {
 		type: Array,
 		default: []
@@ -43,6 +48,8 @@ const userSchema = new mongoose.Schema({
 	},
 	verificationToken: String,
 	verificationExpires: Date,
+	resetToken: String,
+	resetExpires: Date,
 	createdAt: {
 		type: Date,
 		default: Date.now()

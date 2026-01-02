@@ -3,9 +3,12 @@ const { GoogleGenAI } = require('@google/genai');
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const session = require('express-session');
+const flash = require('connect-flash');
 const bcrypt = require('bcryptjs');
+const helmet = require('helmet');
 const nodemailer = require('nodemailer');
 const { body, validationResult } = require('express-validator');
+const rateLimit = require('express-rate-limit');
 const cors = require('cors');
 const cron = require('node-cron');
 const path = require('path');
@@ -44,32 +47,40 @@ app.use(passport.session());
 app.use(cors({
 	origin: process.env.BASE_URL
 }));
+app.use(flash()); // the flash middleware
+app.use(helmet());
+
+// making flash messages available to all views
+app.use((req, res, next) => {
+	res.locals.success = req.flash('success');
+	res.locals.error = req.flash('error');
+	res.locals.errors = req.flash('errors');
+	next();
+});
 
 // passport stuff
 passport.use(new LocalStrategy(
 	{
 		usernameField: 'email',
-		passwordField: 'password'
-	},
-	async (email, password, done) => {
+		passwordField: 'password',
+		passReqToCallback: true
+	}, async (req, email, password, done) => {
 		try {
 			if(!email || !password) {
-				return done(new Error('Bad Request - Missing Credentials'), null);
+				return done(null, false, req.flash('error', 'Missing credentials'));
 			}
 			const user = await User.findOne({ email });
 			if(!user) {
-				return done(new Error('Bad Request - Incorrect Email or Password'), null);
+				return done(null, false, req.flash('error', 'Incorrect email or password'));
 			}
-			// user found
 			const isValid = await bcrypt.compare(password, user.password);
 			if(!isValid) {
-				return done(new Error('Bad Request - Incorrect Email or Password'), null);
+				return done(null, false, req.flash('error', 'Incorrect email or password'));
 			}
-			// grant the user
+			// successfully log-in req
 			done(null, user);
-			
 		} catch(err) {
-			done(err, null);
+			next(err);
 		}
 	}
 ));
@@ -85,10 +96,6 @@ passport.serializeUser((user, done) => {
 passport.deserializeUser(async (id, done) => {
 	try {
 		const user = await User.findById(id);
-		if(!user) {
-			return done(new Error('Bad Request - Invalid Credentials'), null);
-		}
-		// grant user
 		done(null, user);
 		
 	} catch(err) {
@@ -99,6 +106,36 @@ passport.deserializeUser(async (id, done) => {
 const sanitizeInput = (input) => {
 	return input.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 };
+
+const authLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 5 mins
+	max: 5, // 1 req per 24 secs
+	message: 'Too many requests. Try again later.',
+	standardHeaders: true,
+	legacyHeaders: false,
+	skipSuccessfulRequests: true
+});
+
+app.use('/signup', authLimiter);
+app.use('/login', authLimiter);
+
+const apiLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 mins
+	max: 10, // too much??
+	message: 'Too many requests. Try again later.',
+	standardHeaders: true,
+	legacyHeaders: false
+});
+app.use('/api', apiLimiter);
+
+const browseLimiter = rateLimit({
+	windowMs: 1 * 60 * 1000,
+	max: 75,
+	message: 'Too many requests. Try again later.',
+	standardHeaders: true,
+	legacyHeaders: false
+});
+app.use('/', browseLimiter);
 
 // cron job stuff
 cron.schedule('0 0 * * *', async () => {
@@ -135,6 +172,35 @@ const sendVerificationEmail = async (email, token) => {
 	await transporter.sendMail(mailOptions);
 };
 
+const sendResetEmail = async (email, token) => {
+	const resetUrl = `${process.env.BASE_URL}/api/reset/password/verification/${token}`;
+	const mailOptions = {
+		from: process.env.EMAIL_USER,
+		to: email,
+		subject: 'Approve Password Reset',
+		html: `
+		<h1> Approve Password Reset </h1>
+		<p> Click on the link below to reset old Password with the new Password: </p>
+		<a href="${resetUrl}"> Reset Here </a>
+		<p> This link expires in 24 hours. </p>
+		`
+	};
+	await transporter.sendMail(mailOptions);
+};
+
+const successfulResetEmail = async (email) => {
+	const mailOptions = {
+		from: process.env.EMAIL_USER,
+		to: email,
+		subject: 'Your Password Has Beed Updated Successfully',
+		html: `
+		<h1> Password Reset Request Approved Successfully </h1>
+		<p> If you have any complains you can contact us.</p>
+		`
+	};
+	await transporter.sendMail(mailOptions);
+};
+
 // custom middlewares
 const isLoggedIn = (req, res, next) => {
 	try {
@@ -161,45 +227,47 @@ app.post('/signup',[
 	.trim()
 	.escape()
 	.notEmpty()
-	.withMessage('Bad Request - Name field required'),
+	.withMessage('Name field required'),
 	body('email')
 	.trim()
 	.escape()
 	.notEmpty()
-	.withMessage('Bad Request - Email field is required')
+	.withMessage('Email field is required')
 	.isEmail()
 	.normalizeEmail()
-	.withMessage('Bad Request - Invalid Email address'),
+	.withMessage('Invalid Email address'),
 	body('password')
 	.trim()
 	.notEmpty()
-	.withMessage('Bad Request - Password field required')
+	.withMessage('Password field required')
 	.isLength({ min: 6 })
-	.withMessage('Bad Request - Password too short'),
+	.withMessage('Password too short'),
 	body('confirmPassword')
 	.trim()
 	.notEmpty()
-	.withMessage('Bad Request - Confirm Password field required')
-	.isLength({ min: 6 })
-	.withMessage('Bad Request - Password too short'),
+	.withMessage('Confirm Password field required')
 ], async (req, res, next) => {
 	try {
 		const errors = validationResult(req);
 		if(!errors.isEmpty()) {
 			const errMsg = errors.array().map(error => error.msg);
-			res.json({ error: errMsg });
+			req.flash('error', errMsg);
+			return res.redirect('/signup');
 		}
 
 		const { name, email, password, confirmPassword } = req.body;
 		if(!name || !email || !password || !confirmPassword) {
-			return next(new Error('Bad Request - Missing Credentials'));
+			req.flash('error', 'Missing Credentials');
+			return res.redirect('/signup');
 		}
 		if(password !== confirmPassword) {
-			return next(new Error('Bad Request - Password Mismatch'));
+			req.flash('error', 'Password Mismatch');
+			return res.redirect('/signup');
 		}
 		const user = await User.findOne({ email });
 		if(user) {
-			return next(new Error('Bad Request - Incorrect Email or Password'));
+			req.flash('error', 'Incorrect email or password');
+			return res.redirect('/signup');
 		}
 
 		const hashedPassword = await bcrypt.hash(password, 10);
@@ -234,7 +302,7 @@ app.get('/api/verify/email/:token', async (req, res, next) => {
 		});
 		// no user
 		if(!user) {
-			return res.redirect('/resend/verification/link');
+			return res.redirect('/api/resend/verification/link');
 		}
 		// true user
 		user.isVerified = true;
@@ -256,7 +324,7 @@ app.get('/api/verify/email/:token', async (req, res, next) => {
 	}
 });
 
-app.get('/resend/verification/link', (req, res, next) => {
+app.get('/api/resend/verification/link', (req, res, next) => {
 	try {
 		res.render('resend');
 	} catch(err) {
@@ -264,33 +332,37 @@ app.get('/resend/verification/link', (req, res, next) => {
 	}
 });
 
-app.post('/resend/verification/link',[
+app.post('/api/resend/verification/link',[
 	body('email')
 	.trim()
 	.escape()
 	.notEmpty()
-	.withMessage('Bad Request - Email field required')
+	.withMessage('Email field required')
 	.isEmail()
 	.normalizeEmail()
-	.withMessage('Bad Request - Invalid Email address')
+	.withMessage('Invalid Email address')
 ], async (req, res, next) => {
 	try {
 		const errors = validationResult(req);
 		if(!errors.isEmpty()) {
 			const errMsg = errors.array().map(error => error.msg);
-			return res.json({ error: errMsg });
+			req.flash('error', errMsg);
+			return res.redirect('/api/resend/verification/link');
 		}
 		
 		const { email } = req.body;
 		if(!email) {
-			return next(new Error('Bad Request - Email field required'));
+			req.flash('error', 'Email field required');
+			return res.redirect('/api/resend/verification/link');
 		}
 		const user = await User.findOne({ email });
 		if(!user) {
-			return next(new Error('Bad Request - Email not registered'));
+			req.flash('error', 'Email not registered');
+			return res.redirect('/api/resend/verification/link');
 		}
 		if(user.isVerified === true) {
-			return next(new Error('Bad Request - Email already verified'));
+			req.flash('error', 'Email already verified');
+			return res.redirect('/api/resend/verification/link');
 		}
 		// there's unverified user
 		const verificationToken = crypto.randomBytes(32).toString('hex');
@@ -322,21 +394,31 @@ app.post('/login', [
 	.trim()
 	.escape()
 	.notEmpty()
-	.withMessage('Bad Request - Email field required')
+	.withMessage('Email field required')
 	.isEmail()
 	.normalizeEmail()
-	.withMessage('Bad Request - Invalid Email address')
-], passport.authenticate('local', { failureRedirect: '/login' }), ( req, res, next) => {
-	try {
-		const errors = validationResult(req);
-		if(!errors.isEmpty()) {
-			const errMsg = errors.array().map(error => error.msg);
-			return res.json({ error: errMsg });
-		}
-		res.redirect('/');
-	} catch(err) {
-		next(err);
+	.withMessage('Invalid email address'),
+	body('password')
+	.trim()
+	.notEmpty()
+	.withMessage('Password field required')
+	.isLength({ min: 6 })
+	.withMessage('Password too short'),
+],(req, res, next) => {
+	// using passport with custom callback
+	passport.authenticate('local', {
+		failureRedirect: '/login',
+		failureFlash: true,
+		successFlash: 'Welcome Back!'
+	})(req, res, next);
+	// sanitizing again
+	const errors = validationResult(req);
+	if(!errors.isEmpty()) {
+		const errMsg = errors.array().map(error => error.msg);
+		req.flash('error', errMsg);
+		return res.redirect('/login');
 	}
+	res.redirect('/');
 });
 
 app.get('/', isLoggedIn, (req, res, next) => {
@@ -353,7 +435,7 @@ app.get('/', isLoggedIn, (req, res, next) => {
 io.on('connection', (socket) => {
 	socket.on('send-message', async (msg) => {
 		try {
-			const response = await generateContentMine(msg);
+			const response = await generateContent(msg);
 			// console.log("Full result: ", JSON.stringify(response, null, 2));
 			socket.emit('handle-send-message', response);
 
@@ -369,6 +451,7 @@ io.on('connection', (socket) => {
 
 app.get('/service', isLoggedIn, async (req, res, next) => {
 	try {
+
 		const { email } = req.user;
 		app.locals.email = email;
 		const user = await User.findOne({ email });
@@ -385,17 +468,25 @@ app.get('/service', isLoggedIn, async (req, res, next) => {
 });
 
 async function generateContent(prompt) {
+	prompt = sanitizeInput(prompt);
+	const promptInput = `
+	You are an expert AI support assistant for ${websiteUrl}. Your 
+	personality is: warm, human like, one solution generator 
+	(try to satisfy users with one solution on purpose, don't end response 
+	with open question). If you don't think it's not satisfying leave 
+	a contact us link below.
+	`;
 	const result = await ai.models.generateContent({
 		model: "gemini-2.0-flash",
-		contents: "A 3 line poem about quantum computing"
+		contents: promptInput
 	});
-	// const candidate = result.candidates[0];
-	// const responseText  = candidate.content.parts[0].text.trim();
-	console.log(result.text);
-	return result.text;
+	const candidate = result.candidates[0];
+	const responseText  = candidate.content.parts[0].text.trim();
+	console.log('RESPONSE-TEXT: ', responseText);
+	return responseText;
 };
 
-async function generateContentMine(msg) {
+async function generateContentDemoAsyncFunc(msg) {
 	const response = await bcrypt.hash(msg, 10);
 	return response;
 };
@@ -409,7 +500,8 @@ async function saveToDb(email, quest, ans) {
 
 		const questAnsObj = {
 			question: questTrim,
-			answer: ansTrim
+			answer: ansTrim,
+			createdAt: Date.now()
 		};
 		
 		user.conversations.push(questAnsObj);
@@ -421,11 +513,108 @@ async function saveToDb(email, quest, ans) {
 	}
 };
 
-app.get('/logout', (req, res, next) => {
+app.get('/api/reset/password', (req, res, next) => {
+	try {
+		res.render('reset');
+	} catch(err) {
+		next(err);
+	}
+});
+
+app.post('/api/reset/password',[
+	body('email')
+	.trim()
+	.escape()
+	.notEmpty()
+	.withMessage('Email field required')
+	.isEmail()
+	.normalizeEmail()
+	.withMessage('Invalid Email Address'),
+	body('newPassword')
+	.trim()
+	.notEmpty()
+	.withMessage('Email field required')
+	.isLength({ min: 6 })
+	.withMessage('Password too short'),
+], async (req, res, next) => {
+	try {
+		const errors = validationResult(req);
+		if(!errors.isEmpty()) {
+			const errMsg = errors.array().map(error => error.msg);
+			req.flash('error', errMsg);
+		}
+		
+		const { email, newPassword } = req.body;
+		const user = await User.findOne({ email });
+		if(!user) {
+			req.flash('error', 'Email not registered');
+			return res.redirect('/api/reset/password');
+		}
+		// there's user
+		if(user.isVerified === false) {
+			req.flash('error', 'Email not verified, not allowed to reset password');
+			return res.redirect('/api/reset/password');
+		}
+		const isSame = await bcrypt.compare(newPassword, user.password);
+		if(isSame) {
+			req.flash('error', "New password can't be the same as the old one");
+			return res.redirect('/api/reset/password');
+		}
+		// user deserves reset
+		const resetToken = crypto.randomBytes(32).toString('hex');
+		const resetExpires = Date.now() + 24 * 60 * 60 * 1000; //1day plus
+
+		const newHashedPassword = await bcrypt.hash(newPassword, 10);
+
+		user.resetToken = resetToken;
+		user.resetExpires = resetExpires;
+		user.newPassword = newHashedPassword;
+
+		// save patches
+		await user.save();
+		await sendResetEmail(email, resetToken);
+		res.status(200).send('Reset Password approval link sent, please check your email to approve the Password update!');
+		
+	} catch(err) {
+		next(err);
+	}
+});
+
+app.get('/api/reset/password/verification/:token', async (req, res, next) => {
+	try {
+		const token = req.params.token.toString();
+		const user = await User.findOne({
+			resetToken: token,
+			resetExpires: { $gt: Date.now() }
+		});
+		if(!user) {
+			// return res.status(400).send('Invalid or Expired Reset link. Try again.');
+			req.flash('error', 'Invalid or Expired Reset Link. Try again later.');
+			return res.redirect('/api/reset/password');
+		}
+
+		// user really is trying it's best, congrats user!!👊
+		const newPassword = user.newPassword;
+
+		user.password = newPassword; // first replace it
+		user.resetToken = undefined;
+		user.resetExpires = undefined;
+		user.newPassword = undefined; // then remove it
+		// save patches
+		await user.save();
+		await successfulResetEmail(user.email);
+		res.status(200).send('Password Changed Successfully. Now <a href="/login"> Login. </a>');
+
+	} catch(err) {
+		next(err);
+	}
+});
+
+app.get('/logout', isLoggedIn, (req, res, next) => {
 	try {
 		req.logout((err) => {
 			if(err) {
-				return next(new Error('Failed to Log-Out'));
+				return res.status(400).send('Failed to Log-Out. Please try again.');
 			}
 			res.redirect('/login');
 		});
@@ -436,7 +625,7 @@ app.get('/logout', (req, res, next) => {
 
 app.use((req, res, next) => {
 	try {
-		next(new Error('404 - Page Not Found'));
+		res.status(404).send(`<h1> 404 </h1> <h2> Page Not Found </h2>`);
 	} catch(err) {
 		next(err);
 	}

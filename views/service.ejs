@@ -3,51 +3,209 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title> Chat App </title>
-  <link rel="stylesheet" href="/css/service.css" />
+  <title>AI Customer Support</title>
+  <link rel="stylesheet" href="/css/service.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-  <main class="main">
-    <!-- PART 2 -->
-    <div id="msgs">
-    
-    	<% if(conversations.length !== 0) { %>
-    		<% conversations.forEach(conv => { %>
-    			<div class="div-quest div-quest-ans"> <p class="quest-para"> <%= conv.question %> </p> </div>
-    			<div class="div-ans div-quest-ans"> <p class="ans-para"> <%= conv.answer %> </p> </div>
-    		<% }) %>
-    	<% }else { %>
-    		<div class="div-quest div-quest-ans"> <p class="quest-para"> Your question would be here! </p> </div>
-    		<div class="div-ans div-quest-ans"> <p class="ans-para"> AI response would be here! </p> </div>
-    	<% } %>
-    	
-    </div>
-    
-    <!-- PART 1 -->
-    <div class="inputDiv">
-      <!-- form handler 1 -->
-      <div id="div1" class="divs">
-        <form class="forms" id="form1">
-          <label id="label1" for="message"> Message: </label>
-          <input type="text" id="message" name="message" />
-          <input type="submit" id="btn1" class="btns" value="Message" />
-        </form>
+  <div class="chat-container">
+    <!-- Header -->
+    <header class="chat-header">
+      <div class="header-content">
+        <div class="ai-avatar">
+          <i class="fas fa-robot"></i>
+        </div>
+        <div class="header-info">
+          <h1>AI Support Assistant</h1>
+          <p class="status"><span class="status-indicator active"></span> Online • Ready to help</p>
+        </div>
       </div>
-      <!-- form handler 2 -->
-      <div id="div2" class="divs">
-        <!--<form class="forms" id="form2">
-          <label id="label2" for="room"> Room: </label>
-          <input type="text" id="room" name="room" />
-          <input type="submit" id="btn2" class="btns" value="Join" />
-        </form>-->
-        <button id="btn2" class="btns" type="button"> Disconnect </button>
+      <button id="btn2" class="disconnect-btn" title="Disconnect">
+        <i class="fas fa-sign-out-alt"></i>
+      </button>
+    </header>
+
+    <div class="show-socket-error" id="show-socket-error"> Something went wrong. Please try again. </div>
+
+    <!-- Chat Messages Container -->
+    <div class="chat-messages" id="msgs">
+      <!-- Welcome Message -->
+      <div class="message-row ai-message">
+        <div class="avatar">
+          <i class="fas fa-robot"></i>
+        </div>
+        <div class="message-content">
+          <div class="message-bubble">
+            <p>Hello! I'm your AI support assistant. How can I help you today?</p>
+
+            	<% if(conversations.length !== 0) { %>
+            		<% const date = new Date(conversations[0].createdAt); %>
+            		<% const now = new Date(); %>
+            		<% const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); %>
+            		<% const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()); %>
+            		<% const diffTime = today - messageDate; %>
+            		<% const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)); %>
+
+            		<% let dayString = ''; %>
+            		<% if(diffDays === 0) { %>
+            			<% dayString = 'Today'; %>
+            		<% } else if(diffDays === 1) { %>
+            			<% dayString = 'Yesterday'; %>
+            		<% } else if(diffDays < 7) { %>
+            			<% const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']; %>
+            			<% dayString = days[date.getDay()]; %>
+            		<% } else { %>
+            			<% dayString = date.toLocaleDateString(); %>
+            		<% } %>
+            		<% const hours = date.getHours().toString().padStart(2, '0'); %>
+            		<% const minutes = date.getMinutes().toString().padStart(2, '0'); %>
+            		<span class="message-time">
+            			<%= dayString %> <%= hours %>:<%= minutes %>
+            		</span>
+            	<% } else { %>
+            		<span class="message-time"></span>
+            	<% } %>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Load Previous Conversations -->
+      <% if(conversations.length !== 0) { %>
+        <% conversations.forEach(conv => { %>
+          <!-- User Message -->
+          <div class="message-row user-message">
+            <div class="message-content">
+              <div class="message-bubble">
+                <p><%= conv.question %></p>
+
+                	<% if(conv.createdAt) { %>
+                	    <% const date = new Date(conv.createdAt); %>
+                	    <% const now = new Date(); %>
+                	    <% const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); %>
+                	    <% const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()); %>
+                	    <% const diffTime = today - messageDate; %>
+                	    <% const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)); %>
+                	    
+                	    <% let dayString = ''; %>
+                	    <% if(diffDays === 0) { %>
+                	        <% dayString = 'Today'; %>
+                	    <% } else if(diffDays === 1) { %>
+                	        <% dayString = 'Yesterday'; %>
+                	    <% } else if(diffDays < 7) { %>
+                	        <% const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']; %>
+                	        <% dayString = days[date.getDay()]; %>
+                	    <% } else { %>
+                	        <% dayString = date.toLocaleDateString(); %>
+                	    <% } %>
+                	    
+                	    <% const hours = date.getHours().toString().padStart(2, '0'); %>
+                	    <% const minutes = date.getMinutes().toString().padStart(2, '0'); %>
+                	    
+                	    <span class="message-time"><%= dayString %> <%= hours %>:<%= minutes %></span>
+                	<% } else { %>
+                	    <span class="message-time">Just now</span>
+                	<% } %>
+
+              </div>
+            </div>
+            <div class="avatar user-avatar">
+              <!--<i class="fas fa-user"></i>-->
+              <span class="user-avatar-span"> <%= user.name.charAt(0).toUpperCase() %> </span>
+            </div>
+          </div>
+          
+          <!-- AI Response -->
+          <div class="message-row ai-message">
+            <div class="avatar">
+              <i class="fas fa-robot"></i>
+            </div>
+            <div class="message-content">
+              <div class="message-bubble">
+                <p><%= conv.answer %></p>
+
+                <% if(conv.createdAt) { %>
+                    <% const date = new Date(conv.createdAt); %>
+                    <% const now = new Date(); %>
+                    <% const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); %>
+                    <% const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()); %>
+                    <% const diffTime = today - messageDate; %>
+                    <% const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)); %>
+                    
+                    <% let dayString = ''; %>
+                    <% if(diffDays === 0) { %>
+                        <% dayString = 'Today'; %>
+                    <% } else if(diffDays === 1) { %>
+                        <% dayString = 'Yesterday'; %>
+                    <% } else if(diffDays < 7) { %>
+                        <% const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']; %>
+                        <% dayString = days[date.getDay()]; %>
+                    <% } else { %>
+                        <% dayString = date.toLocaleDateString(); %>
+                    <% } %>
+                    
+                    <% const hours = date.getHours().toString().padStart(2, '0'); %>
+                    <% const minutes = date.getMinutes().toString().padStart(2, '0'); %>
+                    
+                    <span class="message-time"><%= dayString %> <%= hours %>:<%= minutes %></span>
+                <% } else { %>
+                    <span class="message-time">Just now</span>
+                <% } %>
+
+              </div>
+            </div>
+          </div>
+        <% }) %>
+      <% } else { %>
+        <!-- Placeholder when no conversations -->
+        <div class="empty-state">
+          <i class="fas fa-comments"></i>
+          <h3>No conversations yet</h3>
+          <p>Start chatting with our AI assistant</p>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- Typing Indicator (Hidden by default) -->
+    <div class="typing-indicator" id="typingIndicator">
+      <div class="avatar">
+        <i class="fas fa-robot"></i>
+      </div>
+      <div class="typing-content">
+        <div class="typing-bubble">
+          <div class="typing-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
       </div>
     </div>
-  </main>
 
-<script src="/socket.io/socket.io.js"></script>
-<script src="/js/service.js"></script>
+    <!-- Input Area -->
+    <div class="chat-input-area">
+      <form id="form1" class="message-form">
+        <div class="input-wrapper">
+          <input 
+            type="text" 
+            id="message" 
+            name="message" 
+            placeholder="Type your message here..." 
+            autocomplete="off"
+            autofocus
+          />
+          <button type="submit" id="btn1" class="send-btn" title="Send message">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </div>
+        <div class="input-hints">
+          <span>Press Enter to send • Shift+Enter for new line</span>
+        </div>
+      </form>
+    </div>
+  </div>
 
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/service.js"></script>
 </body>
 </html>
